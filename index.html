@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Asepmessage</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #007AFF;
+      --gray-bubble: #E5E5EA;
+      --bg: #F2F2F7;
+      --bar-bg: rgba(249,249,249,0.94);
+      --border: rgba(0,0,0,0.14);
+      --text: #000;
+      --sub: #8E8E93;
+      --red: #FF3B30;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    #app {
+      max-width: 430px;
+      margin: 0 auto;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    /* ── SCREENS ── */
+    .screen { display: none; flex-direction: column; height: 100%; }
+    .screen.active { display: flex; }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--bar-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 0.5px solid var(--border);
+      padding: 12px 16px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .header-title { font-size: 17px; font-weight: 600; color: var(--text); letter-spacing: -0.4px; }
+    .large-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
+    .icon-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--blue); padding: 4px; display: flex; align-items: center;
+    }
+    .back-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--blue); font-size: 17px; display: flex;
+      align-items: center; gap: 4px; padding: 4px 0;
+    }
+
+    /* ── ID BADGE ── */
+    .id-badge {
+      margin: 0 16px 16px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .id-label { font-size: 13px; color: var(--sub); margin-bottom: 2px; }
+    .id-number { font-size: 30px; font-weight: 700; letter-spacing: 7px; color: var(--blue); }
+    .copy-btn {
+      background: var(--blue); border: none; border-radius: 8px;
+      color: #fff; font-size: 13px; font-weight: 600; padding: 8px 14px;
+      cursor: pointer; white-space: nowrap; transition: opacity .15s;
+    }
+    .copy-btn:active { opacity: .75; }
+
+    /* ── STATUS DOT ── */
+    .status-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 0 16px 12px; font-size: 13px; color: var(--sub);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #ccc; flex-shrink: 0; transition: background .3s;
+    }
+    .dot.connected { background: #34C759; }
+    .dot.connecting { background: #FF9500; }
+
+    /* ── CONVO LIST ── */
+    .convo-list { flex: 1; overflow-y: auto; }
+    .convo-item {
+      background: #fff; padding: 12px 16px;
+      border-bottom: 0.5px solid rgba(0,0,0,0.08);
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer; transition: background .1s;
+    }
+    .convo-item:active { background: #F2F2F7; }
+    .avatar {
+      width: 50px; height: 50px; border-radius: 50%;
+      background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 18px; font-weight: 700; color: #fff;
+    }
+    .convo-name { font-size: 17px; font-weight: 500; }
+    .convo-last { font-size: 15px; color: var(--sub); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .convo-time { font-size: 13px; color: var(--sub); flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+
+    /* ── EMPTY STATE ── */
+    .empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: var(--sub); text-align: center; padding: 40px;
+    }
+    .empty-icon { font-size: 52px; margin-bottom: 14px; }
+    .empty-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .empty-sub { font-size: 15px; line-height: 1.5; }
+
+    /* ── NEW CHAT SCREEN ── */
+    .new-chat-body { padding: 24px 16px; flex: 1; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px;
+    }
+    .card-label { font-size: 13px; color: var(--sub); margin-bottom: 10px; }
+    #input-id {
+      width: 100%; border: none; border-bottom: 2px solid var(--blue);
+      font-size: 34px; font-weight: 700; letter-spacing: 14px; text-align: center;
+      padding: 8px 0 10px; outline: none; color: var(--text); background: transparent;
+      font-family: inherit;
+    }
+    #id-error { color: var(--red); font-size: 13px; margin-top: 8px; text-align: center; display: none; }
+    .primary-btn {
+      width: 100%; margin-top: 16px; background: var(--blue);
+      border: none; border-radius: 12px; color: #fff;
+      font-size: 17px; font-weight: 600; padding: 14px 0; cursor: pointer;
+      font-family: inherit; transition: opacity .15s;
+    }
+    .primary-btn:active { opacity: .8; }
+
+    /* ── CHAT SCREEN ── */
+    .chat-header-center {
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+    }
+    .chat-avatar-sm {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff;
+    }
+    .chat-peer-name { font-size: 12px; font-weight: 600; color: var(--text); }
+    .chat-peer-status { font-size: 11px; color: var(--sub); }
+
+    .messages-area {
+      flex: 1; overflow-y: auto; padding: 12px 12px 4px;
+      display: flex; flex-direction: column; gap: 2px;
+      background: #fff;
+    }
+
+    .chat-intro {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 0 20px; text-align: center;
+    }
+    .chat-intro-avatar {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 8px;
+    }
+    .chat-intro-name { font-size: 17px; font-weight: 600; }
+    .chat-intro-sub { font-size: 13px; color: var(--sub); margin-top: 2px; }
+    .chat-intro-note { font-size: 12px; color: var(--sub); margin-top: 12px; max-width: 240px; line-height: 1.5; }
+
+    /* ── BUBBLES ── */
+    .bubble-row { display: flex; flex-direction: column; }
+    .bubble-row.mine { align-items: flex-end; }
+    .bubble-row.theirs { align-items: flex-start; }
+
+    .bubble {
+      max-width: 72%; padding: 9px 13px;
+      word-break: break-word; font-size: 16px; line-height: 1.4;
+      animation: popIn .18s ease;
+    }
+    @keyframes popIn {
+      from { transform: scale(.92); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+    .bubble.mine {
+      background: var(--blue); color: #fff;
+      border-radius: 18px 18px 4px 18px;
+    }
+    .bubble.theirs {
+      background: var(--gray-bubble); color: var(--text);
+      border-radius: 18px 18px 18px 4px;
+    }
+    .bubble.img-bubble { padding: 3px; overflow: hidden; }
+    .bubble img { display: block; max-width: 220px; max-height: 280px; border-radius: 15px; }
+    .bubble-time { font-size: 11px; color: var(--sub); margin: 3px 4px 4px; }
+
+    /* ── VOICE BUBBLE ── */
+    .voice-inner {
+      display: flex; align-items: center; gap: 8px; min-width: 150px;
+    }
+    .play-btn {
+      width: 32px; height: 32px; border-radius: 50%; border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .play-btn.mine { background: rgba(255,255,255,.3); }
+    .play-btn.theirs { background: rgba(0,0,0,.12); }
+    .voice-right { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+    .progress-track {
+      height: 3px; border-radius: 2px; position: relative; overflow: hidden;
+    }
+    .progress-track.mine { background: rgba(255,255,255,.3); }
+    .progress-track.theirs { background: rgba(0,0,0,.12); }
+    .progress-fill {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+      transition: width .1s;
+    }
+    .progress-fill.mine { background: rgba(255,255,255,.85); }
+    .progress-fill.theirs { background: var(--blue); }
+    .waveform { display: flex; align-items: center; gap: 2px; height: 18px; }
+    .waveform span {
+      display: inline-block; width: 2.5px; border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .waveform.mine span { background: rgba(255,255,255,.6); }
+    .waveform.theirs span { background: #aaa; }
+    .voice-dur { font-size: 11px; flex-shrink: 0; }
+    .voice-dur.mine { color: rgba(255,255,255,.7); }
+    .voice-dur.theirs { color: var(--sub); }
+
+    /* ── INPUT BAR ── */
+    .input-bar {
+      background: var(--bar-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 0.5px solid var(--border);
+      padding: 8px 12px 20px;
+      display: flex; align-items: flex-end; gap: 8px;
+      flex-shrink: 0;
+    }
+    .inp-icon-btn {
+      width: 34px; height: 34px; border-radius: 50%; border: none;
+      background: var(--gray-bubble);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .inp-wrap {
+      flex: 1; border-radius: 20px; border: 1.5px solid #D1D1D6;
+      background: #fff; display: flex; align-items: flex-end;
+      overflow: hidden; padding: 2px 8px;
+    }
+    #msg-input {
+      flex: 1; border: none; outline: none; resize: none;
+      font-size: 16px; line-height: 22px; padding: 6px 0;
+      background: transparent; font-family: inherit;
+      height: 36px; min-height: 36px; max-height: 100px; overflow-y: auto;
+    }
+    .send-btn {
+      width: 34px; height: 34px; border-radius: 50%; border: none;
+      background: var(--blue); display: flex; align-items: center;
+      justify-content: center; cursor: pointer; flex-shrink: 0;
+      transition: transform .1s;
+    }
+    .send-btn:active { transform: scale(.88); }
+    .mic-btn {
+      width: 34px; height: 34px; border-radius: 50%; border: none;
+      background: var(--gray-bubble); display: flex; align-items: center;
+      justify-content: center; cursor: pointer; flex-shrink: 0;
+      transition: background .2s;
+      user-select: none; -webkit-user-select: none;
+    }
+    .mic-btn.recording { background: var(--red); }
+
+    /* ── REC BANNER ── */
+    #rec-banner {
+      display: none;
+      background: var(--red); color: #fff;
+      text-align: center; font-size: 14px; font-weight: 600;
+      padding: 6px 0; flex-shrink: 0;
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.75); color: #fff; border-radius: 20px;
+      padding: 8px 18px; font-size: 14px; pointer-events: none;
+      opacity: 0; transition: opacity .25s; white-space: nowrap; z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 0; }
+
+    /* ── OFFLINE OVERLAY ── */
+    #offline-overlay {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    #offline-overlay.show { display: flex; }
+    .offline-card {
+      background: #fff; border-radius: 18px; padding: 28px 24px;
+      max-width: 300px; text-align: center; margin: 20px;
+    }
+    .offline-icon { font-size: 44px; margin-bottom: 10px; }
+    .offline-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .offline-sub { font-size: 15px; color: var(--sub); line-height: 1.5; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── HOME SCREEN ── -->
+  <div class="screen active" id="screen-home">
+    <div class="header">
+      <div class="large-title">Asepmessage</div>
+      <button class="icon-btn" onclick="goNew()" title="Chat baru">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M10 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H16C17.1 20 18 19.1 18 18V12"
+            stroke="#007AFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 2H20M20 2V6M20 2L13 9"
+            stroke="#007AFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div style="padding:16px 0 0">
+      <div class="id-badge">
+        <div>
+          <div class="id-label">ID kamu</div>
+          <div class="id-number" id="my-id-display">····</div>
+        </div>
+        <button class="copy-btn" onclick="copyId()">Salin</button>
+      </div>
+      <div class="status-row">
+        <div class="dot connecting" id="status-dot"></div>
+        <span id="status-text">Menghubungkan...</span>
+      </div>
+    </div>
+
+    <div class="convo-list" id="convo-list">
+      <div class="empty" id="empty-state">
+        <div class="empty-icon">💬</div>
+        <div class="empty-title">Belum ada pesan</div>
+        <div class="empty-sub">Tap ikon di kanan atas<br>untuk mulai chat baru</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NEW CHAT SCREEN ── -->
+  <div class="screen" id="screen-new">
+    <div class="header">
+      <button class="back-btn" onclick="goHome()">
+        <svg width="10" height="16" viewBox="0 0 10 16" fill="none">
+          <path d="M9 1L1 8L9 15" stroke="#007AFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Pesan
+      </button>
+      <div class="header-title">Pesan Baru</div>
+      <div style="width:60px"></div>
+    </div>
+    <div class="new-chat-body">
+      <div class="card">
+        <div class="card-label">Masukkan 4 digit ID penerima</div>
+        <input id="input-id" type="tel" maxlength="4" placeholder="0000" inputmode="numeric"
+          oninput="this.value=this.value.replace(/\D/g,''); document.getElementById('id-error').style.display='none'"
+          onkeydown="if(event.key==='Enter') startChat()"/>
+        <div id="id-error">Masukkan 4 digit angka yang valid</div>
+        <button class="primary-btn" onclick="startChat()">Mulai Chat</button>
+      </div>
+      <div class="card">
+        <div class="card-label">ID kamu — bagikan ke teman</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:30px;font-weight:700;letter-spacing:7px;color:var(--blue)" id="my-id-new">····</span>
+          <button class="copy-btn" onclick="copyId()">Salin</button>
+        </div>
+        <div style="font-size:12px;color:var(--sub);margin-top:6px">
+          Kedua pihak harus online bersamaan agar pesan terkirim
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHAT SCREEN ── -->
+  <div class="screen" id="screen-chat">
+    <div class="header">
+      <button class="back-btn" onclick="leaveChat()">
+        <svg width="10" height="16" viewBox="0 0 10 16" fill="none">
+          <path d="M9 1L1 8L9 15" stroke="#007AFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="chat-header-center">
+        <div class="chat-avatar-sm" id="chat-avatar-sm">?</div>
+        <div class="chat-peer-name" id="chat-peer-name">—</div>
+        <div class="chat-peer-status" id="chat-peer-status">Menghubungkan...</div>
+      </div>
+      <div style="width:50px"></div>
+    </div>
+
+    <div class="messages-area" id="messages-area">
+      <div class="chat-intro" id="chat-intro">
+        <div class="chat-intro-avatar" id="chat-intro-avatar">?</div>
+        <div class="chat-intro-name" id="chat-intro-name">—</div>
+        <div class="chat-intro-sub">Asepmessage · ID #<span id="chat-intro-id">—</span></div>
+        <div class="chat-intro-note">Pesan dikirim langsung peer-to-peer.<br>Keduanya harus online bersamaan.</div>
+      </div>
+    </div>
+
+    <div id="rec-banner">🔴 Merekam… <span id="rec-sec">0</span>s — Lepas untuk kirim</div>
+
+    <div class="input-bar">
+      <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleImage(event)"/>
+      <button class="inp-icon-btn" onclick="document.getElementById('file-input').click()" title="Kirim foto">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect x="1" y="3" width="16" height="12" rx="2" stroke="#8E8E93" stroke-width="1.5"/>
+          <circle cx="6" cy="7.5" r="1.5" fill="#8E8E93"/>
+          <path d="M1 13l4-4 3 3 3-3 6 5" stroke="#8E8E93" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="inp-wrap">
+        <textarea id="msg-input" placeholder="Pesan" rows="1"
+          oninput="autoResize(this)"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText()}"></textarea>
+      </div>
+      <button class="send-btn" id="send-btn" onclick="sendText()" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 13V3M8 3L3 8M8 3L13 8" stroke="#fff" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="mic-btn" id="mic-btn" title="Tahan rekam"
+        onmousedown="startRec()" onmouseup="stopRec()"
+        ontouchstart="startRec(event)" ontouchend="stopRec()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="5" y="1" width="6" height="9" rx="3" fill="#8E8E93"/>
+          <path d="M2.5 8.5C2.5 11.5 5 13.5 8 13.5C11 13.5 13.5 11.5 13.5 8.5"
+            stroke="#8E8E93" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="8" y1="13.5" x2="8" y2="15.5" stroke="#8E8E93" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Offline overlay -->
+<div id="offline-overlay">
+  <div class="offline-card">
+    <div class="offline-icon">📡</div>
+    <div class="offline-title">Teman Offline</div>
+    <div class="offline-sub">Koneksi terputus. Keduanya harus online bersamaan untuk chat.</div>
+    <button class="primary-btn" style="margin-top:16px" onclick="leaveChat()">Kembali</button>
+  </div>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const WAVEFORM = [3,6,9,12,8,5,10,7,11,6,4,9,7,5];
+let myId = null;
+let peer = null;
+let currentConn = null;
+let currentPeerId = null;
+let conversations = JSON.parse(localStorage.getItem('asep_convos') || '[]');
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let recTimer = null;
+let recSeconds = 0;
+
+// ─── PeerJS init ──────────────────────────────────────────────────────────────
+function initPeer() {
+  myId = generateId();
+  const peerId = 'asepmsg-' + myId;
+
+  document.getElementById('my-id-display').textContent = myId;
+  document.getElementById('my-id-new').textContent = myId;
+
+  peer = new Peer(peerId, {
+    host: '0.peerjs.com', port: 443, path: '/', secure: true,
+    debug: 0,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    }
+  });
+
+  peer.on('open', () => {
+    setStatus('connected', 'Siap digunakan');
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'unavailable-id') {
+      myId = generateId();
+      peer.destroy();
+      initPeer();
+    } else {
+      setStatus('disconnected', 'Gagal terhubung');
+    }
+  });
+
+  peer.on('disconnected', () => {
+    setStatus('connecting', 'Terputus, mencoba ulang...');
+    setTimeout(() => peer.reconnect(), 2000);
+  });
+
+  peer.on('connection', (conn) => {
+    setupConn(conn);
+  });
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-text');
+  dot.className = 'dot ' + state;
+  label.textContent = text;
+}
+
+function generateId() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+// ─── Connection ───────────────────────────────────────────────────────────────
+function setupConn(conn) {
+  currentConn = conn;
+  currentPeerId = conn.peer.replace('asepmsg-', '');
+
+  conn.on('open', () => {
+    updateChatStatus('Online');
+  });
+
+  conn.on('data', (data) => {
+    receiveMessage(data);
+  });
+
+  conn.on('close', () => {
+    updateChatStatus('Offline');
+    if (document.getElementById('screen-chat').classList.contains('active')) {
+      document.getElementById('offline-overlay').classList.add('show');
+    }
+  });
+
+  conn.on('error', () => {
+    updateChatStatus('Error');
+  });
+}
+
+function connectTo(targetId) {
+  const fullId = 'asepmsg-' + targetId;
+  const conn = peer.connect(fullId, { reliable: true });
+  setupConn(conn);
+}
+
+// ─── Screens ──────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+function goHome() {
+  showScreen('home');
+  renderConvos();
+}
+
+function goNew() {
+  document.getElementById('input-id').value = '';
+  document.getElementById('id-error').style.display = 'none';
+  showScreen('new');
+  setTimeout(() => document.getElementById('input-id').focus(), 100);
+}
+
+function startChat() {
+  const val = document.getElementById('input-id').value.trim();
+  const err = document.getElementById('id-error');
+  if (!/^\d{4}$/.test(val)) {
+    err.textContent = 'Masukkan 4 digit angka';
+    err.style.display = 'block'; return;
+  }
+  if (val === myId) {
+    err.textContent = 'Tidak bisa chat dengan dirimu sendiri';
+    err.style.display = 'block'; return;
+  }
+  err.style.display = 'none';
+  openChat(val);
+}
+
+function openChat(targetId) {
+  currentPeerId = targetId;
+
+  // UI
+  document.getElementById('chat-avatar-sm').textContent = targetId[0];
+  document.getElementById('chat-peer-name').textContent = targetId;
+  document.getElementById('chat-peer-status').textContent = 'Menghubungkan...';
+  document.getElementById('chat-intro-avatar').textContent = targetId[0];
+  document.getElementById('chat-intro-name').textContent = targetId;
+  document.getElementById('chat-intro-id').textContent = targetId;
+
+  // Clear messages
+  const area = document.getElementById('messages-area');
+  area.innerHTML = '';
+  area.appendChild(createIntroEl(targetId));
+
+  // Load stored messages
+  const stored = getMessages(targetId);
+  stored.forEach(m => appendBubble(m));
+
+  showScreen('chat');
+  scrollToBottom();
+
+  // Connect
+  if (!currentConn || currentConn.peer !== 'asepmsg-' + targetId) {
+    connectTo(targetId);
+  }
+
+  updateConvo(targetId, null);
+}
+
+function leaveChat() {
+  document.getElementById('offline-overlay').classList.remove('show');
+  currentPeerId = null;
+  goHome();
+}
+
+function updateChatStatus(text) {
+  document.getElementById('chat-peer-status').textContent = text;
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+function getMessages(peerId) {
+  return JSON.parse(localStorage.getItem('asep_msgs_' + myId + '_' + peerId) || '[]');
+}
+
+function saveMessage(peerId, msg) {
+  const msgs = getMessages(peerId);
+  msgs.push(msg);
+  // keep last 200
+  if (msgs.length > 200) msgs.splice(0, msgs.length - 200);
+  localStorage.setItem('asep_msgs_' + myId + '_' + peerId, JSON.stringify(msgs));
+}
+
+function receiveMessage(data) {
+  if (!currentPeerId) return;
+  const msg = { ...data, from: 'them', timestamp: Date.now() };
+  saveMessage(currentPeerId, msg);
+  appendBubble(msg);
+  scrollToBottom();
+  const preview = data.type === 'text' ? data.content : data.type === 'image' ? '📷 Foto' : '🎤 Voice note';
+  updateConvo(currentPeerId, preview);
+}
+
+function sendMessage(type, content) {
+  if (!currentConn || !currentConn.open) {
+    showToast('Teman belum terhubung');
+    return;
+  }
+  const msg = { type, content };
+  currentConn.send(msg);
+  const stored = { ...msg, from: 'me', timestamp: Date.now() };
+  saveMessage(currentPeerId, stored);
+  appendBubble(stored);
+  scrollToBottom();
+  const preview = type === 'text' ? content : type === 'image' ? '📷 Foto' : '🎤 Voice note';
+  updateConvo(currentPeerId, preview);
+}
+
+function sendText() {
+  const el = document.getElementById('msg-input');
+  const t = el.value.trim();
+  if (!t) return;
+  sendMessage('text', t);
+  el.value = '';
+  el.style.height = '36px';
+  toggleSendMic();
+}
+
+function handleImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => sendMessage('image', ev.target.result);
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+// ─── Voice ────────────────────────────────────────────────────────────────────
+async function startRec(e) {
+  if (e) e.preventDefault();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = ev => { if (ev.data.size > 0) audioChunks.push(ev.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = ev => sendMessage('voice', ev.target.result);
+      reader.readAsDataURL(blob);
+      stream.getTracks().forEach(t => t.stop());
+      stopRecUI();
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    recSeconds = 0;
+    document.getElementById('rec-banner').style.display = 'block';
+    document.getElementById('mic-btn').classList.add('recording');
+    recTimer = setInterval(() => {
+      recSeconds++;
+      document.getElementById('rec-sec').textContent = recSeconds;
+    }, 1000);
+  } catch (_) {
+    showToast('Akses mikrofon ditolak');
+  }
+}
+
+function stopRec() {
+  if (!isRecording) return;
+  mediaRecorder?.stop();
+  isRecording = false;
+}
+
+function stopRecUI() {
+  clearInterval(recTimer);
+  document.getElementById('rec-banner').style.display = 'none';
+  document.getElementById('mic-btn').classList.remove('recording');
+}
+
+// ─── Bubble rendering ─────────────────────────────────────────────────────────
+function appendBubble(msg) {
+  const area = document.getElementById('messages-area');
+  const isMine = msg.from === 'me';
+
+  const row = document.createElement('div');
+  row.className = 'bubble-row ' + (isMine ? 'mine' : 'theirs');
+
+  const bClass = 'bubble ' + (isMine ? 'mine' : 'theirs');
+
+  if (msg.type === 'text') {
+    const b = document.createElement('div');
+    b.className = bClass;
+    b.textContent = msg.content;
+    row.appendChild(b);
+  } else if (msg.type === 'image') {
+    const b = document.createElement('div');
+    b.className = bClass + ' img-bubble';
+    const img = document.createElement('img');
+    img.src = msg.content;
+    b.appendChild(img);
+    row.appendChild(b);
+  } else if (msg.type === 'voice') {
+    const b = document.createElement('div');
+    b.className = bClass;
+    b.style.padding = '9px 13px';
+    b.innerHTML = buildVoiceHTML(msg.content, isMine);
+    row.appendChild(b);
+    // Wire up audio
+    const audio = new Audio(msg.content);
+    const playBtn = b.querySelector('.play-btn');
+    const fill = b.querySelector('.progress-fill');
+    const dur = b.querySelector('.voice-dur');
+    audio.onloadedmetadata = () => { dur.textContent = Math.floor(audio.duration) + 's'; };
+    let playing = false;
+    playBtn.onclick = () => {
+      if (playing) { audio.pause(); playing = false; playBtn.innerHTML = playIconSVG(isMine); }
+      else { audio.play(); playing = true; playBtn.innerHTML = pauseIconSVG(isMine); }
+    };
+    audio.ontimeupdate = () => {
+      const p = audio.currentTime / (audio.duration || 1);
+      fill.style.width = (p * 100) + '%';
+    };
+    audio.onended = () => { playing = false; fill.style.width = '0%'; playBtn.innerHTML = playIconSVG(isMine); };
+  }
+
+  const time = document.createElement('div');
+  time.className = 'bubble-time';
+  time.style.textAlign = isMine ? 'right' : 'left';
+  time.textContent = formatTime(msg.timestamp);
+  row.appendChild(time);
+
+  area.appendChild(row);
+}
+
+function buildVoiceHTML(src, isMine) {
+  const c = isMine ? 'mine' : 'theirs';
+  const bars = WAVEFORM.map(h =>
+    `<span style="height:${h}px"></span>`
+  ).join('');
+  return `
+    <div class="voice-inner">
+      <button class="play-btn ${c}" type="button">${playIconSVG(isMine)}</button>
+      <div class="voice-right">
+        <div class="progress-track ${c}"><div class="progress-fill ${c}"></div></div>
+        <div class="waveform ${c}">${bars}</div>
+      </div>
+      <span class="voice-dur ${c}">—</span>
+    </div>`;
+}
+
+function playIconSVG(isMine) {
+  const f = isMine ? '#fff' : '#333';
+  return `<svg width="12" height="12" viewBox="0 0 12 12"><polygon points="2,1 11,6 2,11" fill="${f}"/></svg>`;
+}
+function pauseIconSVG(isMine) {
+  const f = isMine ? '#fff' : '#333';
+  return `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="4" height="10" rx="1" fill="${f}"/><rect x="7" y="1" width="4" height="10" rx="1" fill="${f}"/></svg>`;
+}
+
+function createIntroEl(peerId) {
+  const d = document.createElement('div');
+  d.className = 'chat-intro';
+  d.id = 'chat-intro';
+  d.innerHTML = `
+    <div class="chat-intro-avatar">${peerId[0]}</div>
+    <div class="chat-intro-name">${peerId}</div>
+    <div class="chat-intro-sub">Asepmessage · ID #${peerId}</div>
+    <div class="chat-intro-note">Pesan dikirim langsung peer-to-peer.<br>Keduanya harus online bersamaan.</div>`;
+  return d;
+}
+
+// ─── Conversations list ───────────────────────────────────────────────────────
+function updateConvo(peerId, lastMsg) {
+  const idx = conversations.findIndex(c => c.id === peerId);
+  if (idx === -1) {
+    conversations.unshift({ id: peerId, lastMsg: lastMsg || '', ts: Date.now() });
+  } else if (lastMsg !== null) {
+    conversations[idx].lastMsg = lastMsg;
+    conversations[idx].ts = Date.now();
+    conversations.sort((a, b) => b.ts - a.ts);
+  }
+  localStorage.setItem('asep_convos', JSON.stringify(conversations));
+  renderConvos();
+}
+
+function renderConvos() {
+  const list = document.getElementById('convo-list');
+  const empty = document.getElementById('empty-state');
+  list.innerHTML = '';
+  if (conversations.length === 0) {
+    list.appendChild(empty);
+    return;
+  }
+  conversations.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'convo-item';
+    item.onclick = () => openChat(c.id);
+    item.innerHTML = `
+      <div class="avatar">${c.id[0]}</div>
+      <div style="flex:1;min-width:0">
+        <div class="convo-name">${c.id}</div>
+        <div class="convo-last">${c.lastMsg || 'Ketuk untuk membuka'}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <span class="convo-time">${formatDate(c.ts)}</span>
+        <svg width="8" height="14" viewBox="0 0 8 14" style="margin-top:6px;opacity:.3">
+          <path d="M1 1l6 6-6 6" stroke="#000" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+        </svg>
+      </div>`;
+    list.appendChild(item);
+  });
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+function scrollToBottom() {
+  const a = document.getElementById('messages-area');
+  setTimeout(() => { a.scrollTop = a.scrollHeight; }, 50);
+}
+
+function autoResize(el) {
+  el.style.height = '36px';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  toggleSendMic();
+}
+
+function toggleSendMic() {
+  const val = document.getElementById('msg-input').value.trim();
+  document.getElementById('send-btn').style.display = val ? 'flex' : 'none';
+  document.getElementById('mic-btn').style.display = val ? 'none' : 'flex';
+}
+
+function copyId() {
+  if (!myId) return;
+  navigator.clipboard.writeText(myId).then(() => showToast('ID disalin!'));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDate(ts) {
+  const d = new Date(ts), now = new Date(), diff = now - d;
+  if (diff < 60000) return 'Baru saja';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm lalu';
+  if (diff < 86400000) return formatTime(ts);
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderConvos();
+initPeer();
+toggleSendMic();
+</script>
+</body>
+</html>
+
